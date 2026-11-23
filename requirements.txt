@@ -1,4 +1,4 @@
 greenlet
 sqlalchemy
 asyncpg
-aiogram
+aiogram[proxy]

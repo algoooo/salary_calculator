@@ -38,7 +38,7 @@
     "added": "➕ Рабочий день добавлен",
     "duplicate": "\uD83D\uDC4C Рабочий день на эту дату и в этой точке уже добавлен\\.",
     "missing": "\uD83E\uDD37\u200D♂\uFE0F Рабочий день не найден",
-    "details": "*{date} · {place}*\n\uD83D\uDD52 Время: {hours} \\({total_hours} ч\\.\\)\n\uD83D\uDCC8 Продажи: {sales:g} р.\n\uD83D\uDCB5 Зарплата: {salary:g} р.\n\uD83D\uDCCD Статус: {status}",
+    "details": "*{date} · {place}*\n\uD83D\uDD52 Время: {hours} \\({total_hours} ч\\.\\)\n\uD83D\uDCC8 Продажи: {sales:g} р\\.\n\uD83D\uDCB5 Зарплата: {salary:g} р\\.\n\uD83D\uDCCD Статус: {status}",
     "paid": "\uD83D\uDCB8 оплачен",
     "unpaid": "❌ не оплачен",
     "mark_paid": "\uD83D\uDCB8 Отметить как оплаченный",

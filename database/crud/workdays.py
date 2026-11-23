@@ -31,7 +31,7 @@ async def get_workdays_by_date(
 
     return workdays
 
-async def get_user_workdays(session: AsyncSession, telegram_id: int) -> list[WorkDay] | []:
+async def get_user_workdays(session: AsyncSession, telegram_id: int) -> list[WorkDay]:
     return list(await session.scalars(select(WorkDay)
                                       .where(WorkDay.employee_id == telegram_id)
                                       .order_by(WorkDay.workday_date.desc())))

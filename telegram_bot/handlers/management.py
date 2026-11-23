@@ -40,7 +40,7 @@ async def _show_workdays(message: types.Message, user_id: int, page: int, *, edi
         if user is None:
             await message.answer(answer("questions.not_registered"))
             return
-        days: list[WorkDay] | [] = await workdays.get_user_workdays(session, user_id)
+        days = await workdays.get_user_workdays(session, user_id)
 
     days.sort(key=lambda day: (day.workday_date, day.id), reverse=True)
     entries, page, page_count = paginate(days, page, PAGE_SIZE)
