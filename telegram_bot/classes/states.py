@@ -8,3 +8,7 @@ class RegistrationStates(StatesGroup):
 class UpdateUserState(StatesGroup):
     Enter_new_hourly_rate = State()
     Enter_new_sales_percent = State()
+
+
+class UpdateWorkdayState(StatesGroup):
+    Enter_pay_rates = State()
