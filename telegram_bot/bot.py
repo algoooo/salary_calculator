@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 
 from telegram_bot.handlers import management, profile
 
+load_dotenv()
 logger = logging.getLogger(__name__)
 PROXY_CHECK_TIMEOUT = 10
 
