@@ -25,9 +25,11 @@ async def bot_connection(token: str, proxies: list[str]):
         async with Bot(token=token, default=defaults) as bot:
             yield bot
         return
-
+    print(defaults)
+    print(proxies)
     for index, proxy in enumerate(proxies, start=1):
         try:
+            print(proxy)
             session = AiohttpSession(proxy=proxy)
         except ValueError:
             logger.warning("Telegram proxy %d has an invalid URL", index)
