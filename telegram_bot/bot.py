@@ -56,7 +56,7 @@ async def main():
     dp.include_routers(profile.router, management.router)
     proxies = [url.strip() for url in os.getenv("BOT_PROXY_URLS", "").split(",") if url.strip()]
     if not proxies:
-        proxy_url = os.getenv("BOT_PROXY_URL", "").strip()
+        proxy_url = os.getenv("BOT_PROXY_URLS", "").strip()
         if proxy_url:
             proxies.append(proxy_url)
 
