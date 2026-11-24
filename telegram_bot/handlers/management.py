@@ -1,6 +1,7 @@
 import re
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from decimal import Decimal
+from itertools import groupby
 
 from aiogram import F, Router, types
 from aiogram.filters import StateFilter
@@ -19,7 +20,6 @@ from tools.pagination import paginate
 from tools.parse_message import parse_message
 
 router = Router()
-PAGE_SIZE = 5
 REPORT_DATE = r"(?im)^\s*(дата|когда|день)(?:\s|:)"
 SUMMARY_DATE = r"[0-9]{1,2}\.[0-9]{1,2}(?:\.[0-9]{4})?"
 SUMMARY_RANGE = re.compile(
@@ -34,6 +34,11 @@ class WorkdayAction(CallbackData, prefix="day"):
     day_id: int = 0
 
 
+def _week_start(day: WorkDay) -> date:
+    work_date = day.workday_date.date()
+    return work_date - timedelta(days=work_date.weekday())
+
+
 async def _show_workdays(message: types.Message, user_id: int, page: int, *, edit: bool):
     async with get_session_factory().begin() as session:
         user = await users.get_user(session, user_id)
@@ -43,12 +48,26 @@ async def _show_workdays(message: types.Message, user_id: int, page: int, *, edi
         days = await workdays.get_user_workdays(session, user_id)
 
     days.sort(key=lambda day: (day.workday_date, day.id), reverse=True)
-    entries, page, page_count = paginate(days, page, PAGE_SIZE)
+    weeks = [(start, list(entries)) for start, entries in groupby(days, key=_week_start)]
+    selected, page, page_count = paginate(weeks, page, 1)
+    heading = answer("workdays.no_workdays_found")
+    entries = []
+    if selected:
+        start, entries = selected[0]
+        end = start + timedelta(days=6)
+        heading = answer(
+            "workdays.list",
+            start=start.strftime("%d.%m.%Y"),
+            end=end.strftime("%d.%m.%Y"),
+            page=page + 1,
+            pages=page_count,
+        )
+
     buttons = [
         [[answer("workdays.entry", plain=True, date=day.workday_date.strftime("%d.%m.%Y"),
                  place=day.workplace_name),
           WorkdayAction(action="view", page=page, day_id=day.id).pack()]]
-        for day in entries
+        for day in reversed(entries)
     ]
 
     navigation = []
@@ -59,10 +78,6 @@ async def _show_workdays(message: types.Message, user_id: int, page: int, *, edi
     if navigation:
         buttons.append(navigation)
 
-    heading = (
-        answer("workdays.list", page=page + 1, pages=page_count)
-        if days else answer("workdays.no_workdays_found")
-    )
     send = message.edit_text if edit else message.answer
     await send(
         f"{heading}\n\n{answer('workdays.add_hint')}\n{answer('workdays.summary_hint')}",

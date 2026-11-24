@@ -23,7 +23,7 @@
   "workdays": {
     "no_workdays_found": "Кажется, вы еще не добавили ни одного дня",
     "entry": "\uD83D\uDCC5 {date} · {place}",
-    "list": "Мои рабочие дни · {page}/{pages}",
+    "list": "Мои рабочие дни · {page}/{pages}\n{start} — {end}",
     "previous": "\uD83D\uDD19 Назад",
     "next": "Далее ➡\uFE0F",
     "back": "\uD83D\uDC49 К рабочим дням",
