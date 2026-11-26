@@ -25,11 +25,8 @@ async def bot_connection(token: str, proxies: list[str]):
         async with Bot(token=token, default=defaults) as bot:
             yield bot
         return
-    print(defaults)
-    print(proxies)
     for index, proxy in enumerate(proxies, start=1):
         try:
-            print(proxy)
             session = AiohttpSession(proxy=proxy)
         except ValueError:
             logger.warning("Telegram proxy %d has an invalid URL", index)
@@ -58,7 +55,7 @@ async def main():
     dp.include_routers(profile.router, management.router)
     proxies = [url.strip() for url in os.getenv("BOT_PROXY_URLS", "").split(",") if url.strip()]
     if not proxies:
-        proxy_url = os.getenv("BOT_PROXY_URLS", "").strip()
+        proxy_url = os.getenv("BOT_PROXY_URL", "").strip()
         if proxy_url:
             proxies.append(proxy_url)
 
@@ -67,4 +64,5 @@ async def main():
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     asyncio.run(main())

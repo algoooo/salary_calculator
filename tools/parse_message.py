@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime
+from math import isclose
 import re
 
 place_attr = ["место", "точка", "кофейня", "где"]
@@ -69,7 +70,7 @@ def check_sum(obj: ParsedDay):
 
     total_claim = obj.total_by_cash + obj.total_by_card + obj.total_by_transfer
 
-    if total != total_claim:
+    if not isclose(total, total_claim, rel_tol=0, abs_tol=1e-9):
         raise TotalErrorException(f"Total does not match with claimed total. Total: {total}, Claimed: {total_claim}")
 
 
@@ -159,10 +160,12 @@ def _parse_date(obj: ParsedDay, values: list) -> ParsedDay:
     return obj
 
 def _parse_money(obj: ParsedDay, category: str, values: list[str]) -> ParsedDay:
-    cash_arg = 0
-    for value in values:
-        if value.isnumeric():
-            cash_arg = int(value)
+    for value in reversed(values):
+        if re.fullmatch(r"[0-9]+(?:[.,][0-9]+)?(?:[рР₽])?", value):
+            cash_arg = float(value.rstrip("рР₽").replace(",", "."))
+            break
+    else:
+        raise ValueError(f"Invalid amount for {category}")
 
     match category:
         case "cash":
