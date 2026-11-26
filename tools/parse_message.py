@@ -52,6 +52,7 @@ def parse_message(message_text) -> ParsedDay:
     day = ParsedDay()
     for line in lines:
         line = line.strip().replace(" ", " ")
+        line = re.sub(r"^([^\s:]+):(?=\S)", r"\1: ", line)
         parts = line.split(" ")
 
         arg = parts[0].lower().strip()

@@ -275,8 +275,7 @@ async def show_workday_summary(message: types.Message, date_range: re.Match[str]
 async def add_workday(message: types.Message):
     report_text = message.text or message.caption or ""
     try:
-        report = re.sub(r"(?m)^(\s*[^\s:]+):(?=\S)", r"\1: ", report_text)
-        day = parse_message(report)
+        day = parse_message(report_text)
         if day.place_name in {"", "ERROR"} or day.hours <= 0 or min(
             day.total_profit, day.total_by_cash, day.total_by_card, day.total_by_transfer
         ) < 0:
