@@ -165,7 +165,9 @@ def _parse_money(obj: ParsedDay, category: str, values: list[str]) -> ParsedDay:
             cash_arg = float(value.rstrip("рР₽").replace(",", "."))
             break
     else:
-        raise ValueError(f"Invalid amount for {category}")
+        if values and values not in (["-"], ["–"], ["—"]):
+            raise ValueError(f"Invalid amount for {category}")
+        cash_arg = 0.0
 
     match category:
         case "cash":
