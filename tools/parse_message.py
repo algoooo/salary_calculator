@@ -17,6 +17,13 @@ money_attr = {
     "remains": ["остаток", "остаток в кассе", "в кассе", "касса"]
 }
 comment_attr = ["коммент", "комментарий", "заметка", "также"]
+field_names = {
+    *place_attr, *date_attr, *name_attr, *time_attr, *comment_attr,
+    *(keyword for keywords in money_attr.values() for keyword in keywords),
+}
+money_pattern = re.compile(
+    r"(?<!\S)(?:[0-9]{1,3}(?: [0-9]{3})+|[0-9]+)(?:[.,][0-9]+)?[рР₽]?(?!\S)"
+)
 
 
 class TotalErrorException(Exception):
@@ -51,15 +58,17 @@ def parse_message(message_text) -> ParsedDay:
     lines = message_text.split("\n")
     day = ParsedDay()
     for line in lines:
-        line = line.strip().replace(" ", " ")
-        line = re.sub(r"^([^\s:]+):(?=\S)", r"\1: ", line)
-        parts = line.split(" ")
-
-        arg = parts[0].lower().strip()
-        if arg == "":
+        parts = line.split()
+        if not parts:
             continue
 
-        values = parts[1:] if len(parts) >= 2 else []
+        label, separator, remainder = line.partition(":")
+        arg = " ".join(label.lower().split())
+        if separator and arg in field_names:
+            values = remainder.split()
+        else:
+            arg, *values = parts
+            arg = arg.lower().rstrip(":")
         day = _parse_line(day, arg, values)
 
     check_sum(day)
@@ -76,17 +85,6 @@ def check_sum(obj: ParsedDay):
 
 
 def _parse_line(obj: ParsedDay, arg: str, values: list[str]) -> ParsedDay:
-
-    to_be_del = []
-    for i in range(0, len(values)):
-        if values[i] == "":
-            to_be_del.insert(0, i)
-
-    for val in to_be_del:
-        values.pop(val)
-
-    arg = arg.replace(":", "").replace(" ", "")
-
 
     if arg in place_attr:
         obj.place_name = " ".join(values)
@@ -123,7 +121,7 @@ def _parse_hours(obj: ParsedDay, values: list[str]) -> ParsedDay:
     obj.hours_formatted = hrs_formatted
 
 
-    args = "".join(values).split(",")
+    args = "".join(values).replace(".", ":").split(",")
 
     for entry in args:
         times = entry.strip().split("-")
@@ -161,14 +159,13 @@ def _parse_date(obj: ParsedDay, values: list) -> ParsedDay:
     return obj
 
 def _parse_money(obj: ParsedDay, category: str, values: list[str]) -> ParsedDay:
-    for value in reversed(values):
-        if re.fullmatch(r"[0-9]+(?:[.,][0-9]+)?(?:[рР₽])?", value):
-            cash_arg = float(value.rstrip("рР₽").replace(",", "."))
-            break
-    else:
-        if values and values not in (["-"], ["–"], ["—"]):
-            raise ValueError(f"Invalid amount for {category}")
+    amounts = money_pattern.findall(" ".join(values))
+    if amounts:
+        cash_arg = float(amounts[-1].rstrip("рР₽").replace(" ", "").replace(",", "."))
+    elif not values or values in (["-"], ["–"], ["—"]):
         cash_arg = 0.0
+    else:
+        raise ValueError(f"Invalid amount for {category}")
 
     match category:
         case "cash":
