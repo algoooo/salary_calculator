@@ -3,7 +3,7 @@ from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from database.models import WorkDay
+from database.models import WorkDay, WorkdayPaidStatus
 
 
 async def _owned_workdays(session: AsyncSession, workday_id: int, user_id: int) -> WorkDay | None:
@@ -31,10 +31,13 @@ async def get_workdays_by_date(
 
     return workdays
 
-async def get_user_workdays(session: AsyncSession, telegram_id: int) -> list[WorkDay]:
-    return list(await session.scalars(select(WorkDay)
-                                      .where(WorkDay.employee_id == telegram_id)
-                                      .order_by(WorkDay.workday_date.desc())))
+async def get_user_workdays(
+    session: AsyncSession, telegram_id: int, *, pay_status: WorkdayPaidStatus | None = None
+) -> list[WorkDay]:
+    query = select(WorkDay).where(WorkDay.employee_id == telegram_id)
+    if pay_status is not None:
+        query = query.where(WorkDay.pay_status == pay_status)
+    return list(await session.scalars(query.order_by(WorkDay.workday_date.desc())))
 async def get_workday(session: AsyncSession, workday_id: int, *, telegram_id: int) -> WorkDay | None:
     return await _owned_workdays(session, workday_id, telegram_id)
 

@@ -34,29 +34,37 @@ class WorkdayAction(CallbackData, prefix="day"):
     day_id: int = 0
 
 
+class UnpaidWorkdayAction(WorkdayAction, prefix="unpaid_day"):
+    pass
+
+
 def _week_start(day: WorkDay) -> date:
     work_date = day.workday_date.date()
     return work_date - timedelta(days=work_date.weekday())
 
 
-async def _show_workdays(message: types.Message, user_id: int, page: int, *, edit: bool):
+async def _show_workdays(
+    message: types.Message, user_id: int, page: int, *, edit: bool, unpaid_only: bool = False
+):
+    action_type = UnpaidWorkdayAction if unpaid_only else WorkdayAction
+    pay_status = WorkdayPaidStatus.UNPAID if unpaid_only else None
     async with get_session_factory().begin() as session:
         user = await users.get_user(session, user_id)
         if user is None:
             await message.answer(answer("questions.not_registered"))
             return
-        days = await workdays.get_user_workdays(session, user_id)
+        days = await workdays.get_user_workdays(session, user_id, pay_status=pay_status)
 
     days.sort(key=lambda day: (day.workday_date, day.id), reverse=True)
     weeks = [(start, list(entries)) for start, entries in groupby(days, key=_week_start)]
     selected, page, page_count = paginate(weeks, page, 1)
-    heading = answer("workdays.no_workdays_found")
+    heading = answer("workdays.no_unpaid_workdays" if unpaid_only else "workdays.no_workdays_found")
     entries = []
     if selected:
         start, entries = selected[0]
         end = start + timedelta(days=6)
         heading = answer(
-            "workdays.list",
+            "workdays.unpaid_list" if unpaid_only else "workdays.list",
             start=start.strftime("%d.%m.%Y"),
             end=end.strftime("%d.%m.%Y"),
             page=page + 1,
@@ -66,40 +74,47 @@ async def _show_workdays(message: types.Message, user_id: int, page: int, *, edi
     buttons = [
         [[answer("workdays.entry", plain=True, date=day.workday_date.strftime("%d.%m.%Y"),
                  place=day.workplace_name),
-          WorkdayAction(action="view", page=page, day_id=day.id).pack()]]
+          action_type(action="view", page=page, day_id=day.id).pack()]]
         for day in reversed(entries)
     ]
 
     navigation = []
     if page > 0:
-        navigation.append([answer("workdays.previous"), WorkdayAction(action="list", page=page - 1).pack()])
+        navigation.append([answer("workdays.previous"), action_type(action="list", page=page - 1).pack()])
     if page + 1 < page_count:
-        navigation.append([answer("workdays.next"), WorkdayAction(action="list", page=page + 1).pack()])
+        navigation.append([answer("workdays.next"), action_type(action="list", page=page + 1).pack()])
     if navigation:
         buttons.append(navigation)
 
     send = message.edit_text if edit else message.answer
-    await send(
-        f"{heading}\n\n{answer('workdays.add_hint')}\n{answer('workdays.summary_hint')}",
-        reply_markup=construct_table_keyboard(buttons) if buttons else None,
-    )
+    if not unpaid_only:
+        heading = f"{heading}\n\n{answer('workdays.add_hint')}\n{answer('workdays.summary_hint')}"
+    await send(heading, reply_markup=construct_table_keyboard(buttons) if buttons else None)
 
 
-@router.callback_query(F.data == "my_workdays")
+@router.callback_query(F.data.in_({"my_workdays", "my_unpaid_workdays"}))
 async def my_workdays(callback: types.CallbackQuery):
     await callback.answer()
     if isinstance(callback.message, types.Message):
-        await _show_workdays(callback.message, callback.from_user.id, 0, edit=False)
+        await _show_workdays(
+            callback.message, callback.from_user.id, 0,
+            edit=False, unpaid_only=callback.data == "my_unpaid_workdays",
+        )
 
 
 @router.callback_query(WorkdayAction.filter(F.action == "list"))
+@router.callback_query(UnpaidWorkdayAction.filter(F.action == "list"))
 async def workday_page(callback: types.CallbackQuery, callback_data: WorkdayAction):
     await callback.answer()
     if isinstance(callback.message, types.Message):
-        await _show_workdays(callback.message, callback.from_user.id, callback_data.page, edit=True)
+        await _show_workdays(
+            callback.message, callback.from_user.id, callback_data.page,
+            edit=True, unpaid_only=isinstance(callback_data, UnpaidWorkdayAction),
+        )
 
 
 @router.callback_query(WorkdayAction.filter(F.action.in_({"view", "confirm", "delete", "paid", "unpaid"})))
+@router.callback_query(UnpaidWorkdayAction.filter(F.action.in_({"view", "confirm", "delete", "paid", "unpaid"})))
 async def manage_workday(callback: types.CallbackQuery, callback_data: WorkdayAction):
     await callback.answer()
     message = callback.message
@@ -110,6 +125,7 @@ async def manage_workday(callback: types.CallbackQuery, callback_data: WorkdayAc
     action = callback_data.action
     day_id = callback_data.day_id
     page = callback_data.page
+    action_type = type(callback_data)
     async with get_session_factory().begin() as session:
         if action == "delete":
             deleted = await workdays.delete_workday(session, day_id, user_id)
@@ -122,17 +138,19 @@ async def manage_workday(callback: types.CallbackQuery, callback_data: WorkdayAc
     if action == "delete":
         if not deleted:
             await message.answer(answer("workdays.missing"))
-        await _show_workdays(message, user_id, page, edit=True)
+        await _show_workdays(
+            message, user_id, page, edit=True, unpaid_only=isinstance(callback_data, UnpaidWorkdayAction),
+        )
         return
 
-    back = [answer("workdays.back"), WorkdayAction(action="list", page=page).pack()]
+    back = [answer("workdays.back"), action_type(action="list", page=page).pack()]
     if day is None:
         await message.edit_text(answer("workdays.missing"), reply_markup=construct_table_keyboard([[back]]))
         return
 
     if action == "confirm":
-        delete = WorkdayAction(action="delete", page=page, day_id=day_id).pack()
-        view = WorkdayAction(action="view", page=page, day_id=day_id).pack()
+        delete = action_type(action="delete", page=page, day_id=day_id).pack()
+        view = action_type(action="view", page=page, day_id=day_id).pack()
         await message.edit_text(
             answer("workdays.confirm_delete"),
             reply_markup=construct_table_keyboard([
@@ -145,15 +163,15 @@ async def manage_workday(callback: types.CallbackQuery, callback_data: WorkdayAc
     paid = day.pay_status == WorkdayPaidStatus.PAID
     status_key = "paid" if paid else "unpaid"
     next_status = "unpaid" if paid else "paid"
-    status_action = WorkdayAction(action=next_status, page=page, day_id=day_id).pack()
-    confirm = WorkdayAction(action="confirm", page=page, day_id=day_id).pack()
+    status_action = action_type(action=next_status, page=page, day_id=day_id).pack()
+    confirm = action_type(action="confirm", page=page, day_id=day_id).pack()
     await message.edit_text(
         answer("workdays.details", date=day.workday_date.strftime("%d.%m.%Y"),
                place=day.workplace_name, hours=day.hours_formatted, total_hours=day.total_hours,
                sales=day.total_profit, salary=day.employee_profit, status=answer(f"workdays.{status_key}")),
         reply_markup=construct_table_keyboard([
             [[answer(f"workdays.mark_{next_status}"), status_action]],
-            [[answer("workdays.edit_pay"), WorkdayAction(action="edit_pay", page=page, day_id=day_id).pack()]],
+            [[answer("workdays.edit_pay"), action_type(action="edit_pay", page=page, day_id=day_id).pack()]],
             [[answer("workdays.delete"), confirm]],
             [back],
         ]),
@@ -161,6 +179,7 @@ async def manage_workday(callback: types.CallbackQuery, callback_data: WorkdayAc
 
 
 @router.callback_query(WorkdayAction.filter(F.action == "edit_pay"))
+@router.callback_query(UnpaidWorkdayAction.filter(F.action == "edit_pay"))
 async def edit_workday_pay(callback: types.CallbackQuery, callback_data: WorkdayAction, state: FSMContext):
     await callback.answer()
     if not isinstance(callback.message, types.Message):
