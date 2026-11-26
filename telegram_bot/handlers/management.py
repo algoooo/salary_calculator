@@ -43,6 +43,22 @@ def _week_start(day: WorkDay) -> date:
     return work_date - timedelta(days=work_date.weekday())
 
 
+def _format_workday_summary(days: list[WorkDay], start: date, end: date) -> str:
+    salary = sum(day.employee_profit for day in days)
+    paid = sum(day.employee_profit for day in days if day.pay_status == WorkdayPaidStatus.PAID)
+    return answer(
+        "workdays.summary",
+        start=start.strftime("%d.%m.%Y"),
+        end=end.strftime("%d.%m.%Y"),
+        shifts=len(days),
+        hours=sum(day.total_hours for day in days),
+        sales=sum(day.total_profit for day in days),
+        salary=salary,
+        paid=paid,
+        unpaid=salary - paid,
+    )
+
+
 async def _show_workdays(
     message: types.Message, user_id: int, page: int, *, edit: bool, unpaid_only: bool = False
 ):
@@ -87,7 +103,10 @@ async def _show_workdays(
         buttons.append(navigation)
 
     send = message.edit_text if edit else message.answer
-    if not unpaid_only:
+    if unpaid_only and days:
+        summary = _format_workday_summary(days, days[-1].workday_date.date(), days[0].workday_date.date())
+        heading = f"{heading}\n\n{summary}"
+    elif not unpaid_only:
         heading = f"{heading}\n\n{answer('workdays.add_hint')}\n{answer('workdays.summary_hint')}"
     await send(heading, reply_markup=construct_table_keyboard(buttons) if buttons else None)
 
@@ -275,18 +294,7 @@ async def show_workday_summary(message: types.Message, date_range: re.Match[str]
         await message.answer(answer("workdays.summary_empty", **period))
         return
 
-    salary = sum(day.employee_profit for day in days)
-    paid = sum(day.employee_profit for day in days if day.pay_status == WorkdayPaidStatus.PAID)
-    await message.answer(answer(
-        "workdays.summary",
-        **period,
-        shifts=len(days),
-        hours=sum(day.total_hours for day in days),
-        sales=sum(day.total_profit for day in days),
-        salary=salary,
-        paid=paid,
-        unpaid=salary - paid,
-    ))
+    await message.answer(_format_workday_summary(days, start, end))
 
 
 @router.message(StateFilter(None), F.text.regexp(REPORT_DATE))
